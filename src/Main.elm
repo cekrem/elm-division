@@ -37,11 +37,10 @@ type Divisor
     = Divisor Int
 
 
-type Step
-    = DivisionResult Int
-    | MultiplicationResult Int
-    | DrawDownNumber Int
-    | SubtractionResult Int
+type alias Step =
+    { quotient : Int
+    , remainder : Int
+    }
 
 
 init : () -> ( Model, Cmd Msg )
@@ -55,33 +54,32 @@ equationSteps : Dividend -> Divisor -> List Step
 equationSteps ((Dividend dividendInt) as dividend) ((Divisor divisorInt) as divisor) =
     let
         parts =
-            dividendParts dividend divisor
+            dividendInt |> String.fromInt >> String.split "" >> List.map String.toInt >> List.map (Maybe.withDefault 0)
 
         _ =
             Debug.log "parts" parts
 
-        go dividendPart prevSteps =
-            []
+        calculateStep dividendPart previousRemainder =
+            let
+                adjustedDend =
+                    dividendPart + (previousRemainder * 10)
+
+                _ =
+                    Debug.log "calculate step" { diviendPart = dividendPart, adjustedDend = adjustedDend }
+            in
+            { quotient = adjustedDend // divisorInt, remainder = remainderBy divisorInt adjustedDend }
     in
-    go dividend []
-
-
-dividendParts : Dividend -> Divisor -> List Int
-dividendParts (Dividend dividend) (Divisor divisor) =
-    let
-        naiveParts =
-            dividend |> String.fromInt >> String.split "" >> List.map String.toInt >> List.map (Maybe.withDefault 0)
-    in
-    case naiveParts of
-        first :: second :: rest ->
-            if first < divisor then
-                (first * 10 + second) :: rest
-
-            else
-                naiveParts
-
-        _ ->
-            naiveParts
+    parts
+        |> List.foldl
+            (\dend ( acc, prevRmd ) ->
+                let
+                    step =
+                        calculateStep dend prevRmd
+                in
+                ( step :: acc, step.remainder )
+            )
+            ( [], 0 )
+        |> Tuple.first
 
 
 
