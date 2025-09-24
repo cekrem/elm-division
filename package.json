@@ -1,0 +1,19 @@
+{
+  "name": "elm-division",
+  "version": "1.0.0",
+  "author": "Christian Ekrem <christianekrem@gmail.com>",
+  "license": "MIT",
+  "scripts": {
+    "postinstall": "elm-tooling install",
+    "build": "elm make src/Main.elm  --output=public_html/index.html --optimize",
+    "dev": "elm-live src/Main.elm -- --debug",
+    "start": "http-server public_html --port=$PORT"
+  },
+  "devDependencies": {
+    "elm-live": "^4.0.2",
+    "elm-tooling": "^1.16.0"
+  },
+  "dependencies": {
+    "http-server": "^14.1.1"
+  }
+}
