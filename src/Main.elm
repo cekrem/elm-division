@@ -24,61 +24,134 @@ main =
 
 
 type alias Model =
-    { dividend : Dividend
-    , divisor : Divisor
+    { dividend : EquationNumber Dividend
+    , divisor : EquationNumber Divisor
     }
 
 
+type EquationNumber a
+    = EquationNumber Int
+
+
+toInt : EquationNumber a -> Int
+toInt (EquationNumber int) =
+    int
+
+
 type Dividend
-    = Dividend Int
+    = Dividend
+
+
+toDividend : Int -> EquationNumber Dividend
+toDividend int =
+    EquationNumber int
 
 
 type Divisor
-    = Divisor Int
+    = Divisor
+
+
+toDivisor : Int -> EquationNumber Divisor
+toDivisor int =
+    EquationNumber int
+
+
+type Quotient
+    = Quotient
+
+
+toQuotient : Int -> EquationNumber Quotient
+toQuotient int =
+    EquationNumber int
+
+
+type Remainder
+    = Remainder
+
+
+toRemainder : Int -> EquationNumber Remainder
+toRemainder int =
+    EquationNumber int
+
+
+type Product
+    = Product
+
+
+toProduct : Int -> EquationNumber Product
+toProduct int =
+    EquationNumber int
 
 
 type alias Step =
-    { quotient : Int
-    , remainder : Int
+    { dividendPart : EquationNumber Dividend
+    , divisor : EquationNumber Divisor
+    , quotient : EquationNumber Quotient
+    , remainder : EquationNumber Remainder
+    , product : EquationNumber Product
+    }
+
+
+step : EquationNumber Divisor -> EquationNumber Dividend -> EquationNumber Remainder -> Step
+step ((EquationNumber divisor) as typedDivisor) (EquationNumber dividend) (EquationNumber prevRemainder) =
+    let
+        adjustedDividend =
+            dividend + (prevRemainder * 10)
+
+        quotient =
+            adjustedDividend // divisor
+
+        product =
+            quotient * divisor
+
+        remainder =
+            adjustedDividend - product
+
+        _ =
+            Debug.log "calculate step"
+                { divisorInt = divisor
+                , adjustedDividend = adjustedDividend
+                , product = product
+                , remainder = remainder
+                }
+    in
+    { dividendPart = adjustedDividend |> toDividend
+    , divisor = typedDivisor
+    , quotient = quotient |> toQuotient
+    , product = product |> toProduct
+    , remainder = remainder |> toRemainder
     }
 
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( Model (Dividend 444) (Divisor 3)
+    ( Model (EquationNumber 444) (EquationNumber 3)
     , Cmd.none
     )
 
 
-equationSteps : Dividend -> Divisor -> List Step
-equationSteps ((Dividend dividendInt) as dividend) ((Divisor divisorInt) as divisor) =
+equationSteps : EquationNumber Dividend -> EquationNumber Divisor -> List Step
+equationSteps (EquationNumber dividendInt) divisor =
     let
         parts =
-            dividendInt |> String.fromInt >> String.split "" >> List.map String.toInt >> List.map (Maybe.withDefault 0)
+            dividendInt |> String.fromInt >> String.split "" >> List.map String.toInt >> List.map (Maybe.withDefault 0) |> List.map toDividend
 
         _ =
             Debug.log "parts" parts
 
-        calculateStep dividendPart previousRemainder =
-            let
-                adjustedDend =
-                    dividendPart + (previousRemainder * 10)
-
-                _ =
-                    Debug.log "calculate step" { diviendPart = dividendPart, adjustedDend = adjustedDend }
-            in
-            { quotient = adjustedDend // divisorInt, remainder = remainderBy divisorInt adjustedDend }
+        stepWithDevisor =
+            step divisor
     in
     parts
         |> List.foldl
             (\dend ( acc, prevRmd ) ->
                 let
-                    step =
-                        calculateStep dend prevRmd
+                    currentStep =
+                        stepWithDevisor dend prevRmd
                 in
-                ( step :: acc, step.remainder )
+                ( currentStep :: acc, currentStep.remainder )
             )
-            ( [], 0 )
+            ( [], 0 |> toRemainder )
         |> Tuple.first
 
 
@@ -130,9 +203,9 @@ view model =
         ]
 
 
-viewEquation : Dividend -> Divisor -> Html Msg
-viewEquation (Dividend dividend) (Divisor divisor) =
-    Html.text <| (dividend |> String.fromInt) ++ " : " ++ (divisor |> String.fromInt) ++ " = "
+viewEquation : EquationNumber Dividend -> EquationNumber Divisor -> Html Msg
+viewEquation (EquationNumber dividendInt) (EquationNumber divisorInt) =
+    Html.text <| (dividendInt |> String.fromInt) ++ " : " ++ (divisorInt |> String.fromInt) ++ " = "
 
 
 viewQuotient : List Step -> List (Html msg)
