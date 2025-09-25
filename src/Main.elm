@@ -77,11 +77,11 @@ toDivisor int =
     EquationNumber int
 
 
-type Quotient
-    = Quotient
+type QuotientPart
+    = QuotientPart
 
 
-toQuotient : Int -> EquationNumber Quotient
+toQuotient : Int -> EquationNumber QuotientPart
 toQuotient int =
     EquationNumber int
 
@@ -105,9 +105,9 @@ toProduct int =
 
 
 type alias Step =
-    { dividendPart : EquationNumber DividendPart
+    { dividendWithRemainder : EquationNumber DividendPart
     , divisor : EquationNumber Divisor
-    , quotient : EquationNumber Quotient
+    , quotient : EquationNumber QuotientPart
     , remainder : EquationNumber Remainder
     , product : EquationNumber Product
     }
@@ -136,7 +136,7 @@ step ((EquationNumber divisor) as typedDivisor) (EquationNumber dividendPart) (E
                 , remainder = remainder
                 }
     in
-    { dividendPart = adjustedDividend |> toDividendPart
+    { dividendWithRemainder = adjustedDividend |> toDividendPart
     , divisor = typedDivisor
     , quotient = quotient |> toQuotient
     , product = product |> toProduct
@@ -238,18 +238,44 @@ view model =
         , Attributes.style "align-items" "center"
         , Attributes.style "justify-content" "center"
         , Attributes.style "font-family" "monospace"
-        , Attributes.style "font-size" "5vmin"
+        , Attributes.style "font-size" "6vmin"
         ]
         [ Html.h1 [] [ Html.text "Elm Division" ]
         , Html.div []
             [ Html.button [ Events.onClick PrevStep, Attributes.disabled (model.activeStep == 0) ] [ Html.text "<" ]
             , Html.button [ Events.onClick NextStep, Attributes.disabled (model.activeStep == numberOfSteps) ] [ Html.text ">" ]
             ]
-        , Html.div []
-            (viewEquation model.dividend model.divisor :: viewQuotient steps)
-        , viewEquationSteps steps numberOfSteps model.activeStep
-        , viewStepExplanation steps
+        , viewEquationWrapper <|
+            Html.text (viewEquation model)
+                :: (steps
+                        |> List.indexedMap
+                            (\index st ->
+                                Html.div [ Attributes.style "color" (color index) ]
+                                    [ Html.div []
+                                        [ Html.div [] [ textSpacer (index + 1), Html.text (st.dividendWithRemainder |> toString) ]
+                                        , Html.div [] [ textSpacer index, Html.text (st.product |> toString |> String.append "-") ]
+                                        , Html.div [] [ textSpacer index, Html.text (st.remainder |> toString |> String.append "= ") ]
+                                        ]
+                                    ]
+                            )
+                   )
+
+        --  , viewStepExplanation steps
         ]
+
+
+viewEquationWrapper : List (Html msg) -> Html msg
+viewEquationWrapper content =
+    Html.div
+        [ Attributes.style "background-image"
+            "linear-gradient(to right, grey 1px, transparent 1px), linear-gradient(to bottom, grey 1px, transparent 1px)"
+
+        -- TODO: Align
+        , Attributes.style "background-size" "0.6em 1.18em, 0.6em 1.18em"
+        , Attributes.style "background-repeat" "repeat, repeat"
+        , Attributes.style "text-align" "left"
+        ]
+        content
 
 
 equationColors : Array.Array String
@@ -283,30 +309,6 @@ color int =
     equationColors |> Array.get int |> Maybe.withDefault "unset"
 
 
-viewEquationSteps : List Step -> Int -> Int -> Html msg
-viewEquationSteps steps numberOfSteps activeStep =
-    Html.div
-        [ Attributes.style "text-align" "left"
-        , Attributes.style "align-self" "center"
-        ]
-        (steps
-            |> List.indexedMap
-                (\index st ->
-                    let
-                        spacer =
-                            "" |> String.padLeft index (Char.fromCode 160) |> Html.text
-                    in
-                    Html.div [ Attributes.style "color" (color index) ]
-                        [ Html.div []
-                            [ Html.div [] [ spacer, Html.text (st.dividendPart |> toString |> String.append "\u{200E} ") ]
-                            , Html.div [] [ spacer, Html.text (st.product |> toString |> String.append "-") ]
-                            , Html.div [] [ spacer, Html.text (st.remainder |> toString |> String.append "= ") ]
-                            ]
-                        ]
-                )
-        )
-
-
 viewStepExplanation : List Step -> Html msg
 viewStepExplanation steps =
     Html.div []
@@ -318,7 +320,7 @@ viewStepExplanation steps =
                         , Attributes.style "text-align" "right"
                         ]
                         [ Html.div []
-                            [ Html.text (st.dividendPart |> toString)
+                            [ Html.text (st.dividendWithRemainder |> toString)
                             , Html.text " : "
                             , Html.text (st.divisor |> toString)
                             , Html.text " = "
@@ -332,7 +334,7 @@ viewStepExplanation steps =
                             , Html.text (st.product |> toString)
                             ]
                         , Html.div []
-                            [ Html.text (st.dividendPart |> toString)
+                            [ Html.text (st.dividendWithRemainder |> toString)
                             , Html.text " - "
                             , Html.text (st.product |> toString)
                             , Html.text " = "
@@ -348,12 +350,16 @@ viewStepExplanation steps =
         )
 
 
-viewQuotient : List { a | quotient : EquationNumber Quotient } -> List (Html msg)
-viewQuotient steps =
-    steps
-        |> List.map (\s -> s.quotient |> toString |> Html.text)
+textSpacer : Int -> Html msg
+textSpacer int =
+    "" |> String.padLeft int (Char.fromCode 160) |> Html.text
 
 
-viewEquation : EquationNumber Dividend -> EquationNumber Divisor -> Html Msg
-viewEquation (EquationNumber dividendInt) (EquationNumber divisorInt) =
-    Html.text <| (dividendInt |> String.fromInt) ++ " : " ++ (divisorInt |> String.fromInt) ++ " = "
+viewEquation :
+    { a
+        | dividend : EquationNumber Dividend
+        , divisor : EquationNumber Divisor
+    }
+    -> String
+viewEquation { dividend, divisor } =
+    (dividend |> toString) ++ " : " ++ (divisor |> toString) ++ " = "
