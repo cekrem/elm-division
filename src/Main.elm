@@ -51,6 +51,28 @@ toString (EquationNumber int) =
     int |> String.fromInt
 
 
+digits : EquationNumber a -> Int
+digits (EquationNumber int) =
+    if int > 99 then
+        3
+
+    else if int > 9 then
+        2
+
+    else
+        1
+
+
+isSingleDigit : EquationNumber a -> Bool
+isSingleDigit eqNum =
+    (eqNum |> digits) == 1
+
+
+isDoubleDigit : EquationNumber a -> Bool
+isDoubleDigit eqNum =
+    (eqNum |> digits) == 2
+
+
 type Dividend
     = Dividend
 
@@ -135,11 +157,12 @@ type alias Step =
     , remainder : EquationNumber Remainder
     , product : EquationNumber Product
     , nextNumber : Maybe (EquationNumber DividendPart)
+    , offset : Int
     }
 
 
-stepWithoutNextNumber : EquationNumber Divisor -> EquationNumber DividendPart -> EquationNumber Remainder -> Step
-stepWithoutNextNumber ((EquationNumber divisor) as typedDivisor) ((EquationNumber dividendPart) as typedDividendPart) (EquationNumber prevRemainder) =
+stepWithoutNextNumber : EquationNumber Divisor -> EquationNumber DividendPart -> EquationNumber Remainder -> Int -> Step
+stepWithoutNextNumber ((EquationNumber divisor) as typedDivisor) ((EquationNumber dividendPart) as typedDividendPart) (EquationNumber prevRemainder) offset =
     let
         adjustedDividend =
             dividendPart + (prevRemainder * 10)
@@ -152,14 +175,6 @@ stepWithoutNextNumber ((EquationNumber divisor) as typedDivisor) ((EquationNumbe
 
         remainder =
             adjustedDividend - product
-
-        _ =
-            Debug.log "calculate step"
-                { divisorInt = divisor
-                , adjustedDividend = adjustedDividend
-                , product = product
-                , remainder = remainder
-                }
     in
     { dividend = typedDividendPart
     , dividendWithRemainder = adjustedDividend |> toDividendPart
@@ -168,12 +183,13 @@ stepWithoutNextNumber ((EquationNumber divisor) as typedDivisor) ((EquationNumbe
     , product = product |> toProduct
     , remainder = remainder |> toRemainder
     , nextNumber = Nothing
+    , offset = offset
     }
 
 
-dividendParts : EquationNumber Divisor -> EquationNumber Dividend -> List (EquationNumber DividendPart)
+dividendParts : EquationNumber Divisor -> EquationNumber Dividend -> List ( EquationNumber DividendPart, Int )
 dividendParts (EquationNumber divisorInt) (EquationNumber dividendInt) =
-    let
+    (let
         naiveParts =
             dividendInt |> String.fromInt |> String.split "" |> List.map String.toInt >> List.map (Maybe.withDefault 0)
 
@@ -188,8 +204,19 @@ dividendParts (EquationNumber divisorInt) (EquationNumber dividendInt) =
 
                 _ ->
                     parts |> List.map EquationNumber
-    in
-    makeDivisable naiveParts
+     in
+     makeDivisable naiveParts
+    )
+        |> List.foldl
+            (\partNumber ( parts, offsetCounter ) ->
+                let
+                    nextOffset =
+                        offsetCounter + (partNumber |> digits)
+                in
+                ( parts ++ [ ( partNumber, nextOffset ) ], nextOffset )
+            )
+            ( [], 0 )
+        |> Tuple.first
 
 
 equationSteps : { a | dividend : EquationNumber Dividend, divisor : EquationNumber Divisor } -> ( List Step, Int )
@@ -203,10 +230,10 @@ equationSteps { dividend, divisor } =
     in
     ( parts
         |> List.foldl
-            (\dend ( acc, prevRmd ) ->
+            (\( dend, offset ) ( acc, prevRmd ) ->
                 let
                     currentStep =
-                        stepWithDevisor dend prevRmd
+                        stepWithDevisor dend prevRmd offset
                 in
                 ( currentStep :: acc, currentStep.remainder )
             )
@@ -254,7 +281,7 @@ update msg model =
         SetDividend input ->
             case input |> parseDividend of
                 Just d ->
-                    ( { model | dividend = d }, Cmd.none )
+                    ( { model | dividend = d, activeStep = 0 }, Cmd.none )
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -262,7 +289,7 @@ update msg model =
         SetDivisor input ->
             case input |> parseDivisor of
                 Just d ->
-                    ( { model | divisor = d }, Cmd.none )
+                    ( { model | divisor = d, activeStep = 0 }, Cmd.none )
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -368,14 +395,12 @@ viewEquation { dividend, divisor, steps } =
           )
             |> HtmlHelpers.wrapToSingleNode
         , (steps
-            |> mapToColoredDivsIndexed
-                (\index st ->
-                    [ Html.div []
-                        [ HtmlHelpers.when (index > 1) (Html.div [] [ textSpacer (index + 1), Html.text (st.dividendWithRemainder |> toString) ])
-                        , Html.div []
-                            [ textSpacer 0
-                            , Html.text "-"
-                            , Html.text (st.product |> toString)
+            |> mapToColoredDivs
+                (\st ->
+                    [ Html.div [ Attributes.style "white-space" "pre" ]
+                        [ Html.div []
+                            [ Html.text "-"
+                            , Html.text (st.product |> toString |> String.padLeft st.offset ' ')
 
                             -- "draw down" arrow:
                             , HtmlHelpers.maybeNode
@@ -383,14 +408,13 @@ viewEquation { dividend, divisor, steps } =
                                     Html.span
                                         [ Attributes.style "color" "rgba(127,127,127, 0.5)"
                                         ]
-                                        [ Html.text "↓" ]
+                                        [ Html.text "⇣" ]
                                 )
                                 st.nextNumber
                             ]
                         , Html.div []
-                            [ textSpacer 0
-                            , Html.text "="
-                            , Html.text (st.remainder |> toString)
+                            [ Html.text "="
+                            , Html.text (st.remainder |> toString |> String.padLeft st.offset ' ')
 
                             -- "draw down" next number:
                             , HtmlHelpers.maybeNode
@@ -448,17 +472,17 @@ mapToColoredSpans transform attributes =
     List.indexedMap (\index entry -> Html.span (Attributes.style "color" (color index) :: attributes) (transform entry))
 
 
-mapToColoredDivsIndexed : (Int -> a -> List (Html msg)) -> List (Html.Attribute msg) -> List a -> List (Html msg)
-mapToColoredDivsIndexed transform attributes =
-    List.indexedMap (\index entry -> Html.div (Attributes.style "color" (color index) :: attributes) (transform index entry))
+mapToColoredDivs : (a -> List (Html msg)) -> List (Html.Attribute msg) -> List a -> List (Html msg)
+mapToColoredDivs transform attributes =
+    List.indexedMap (\index entry -> Html.div (Attributes.style "color" (color index) :: attributes) (transform entry))
 
 
 viewStepExplanation : List Step -> Html msg
 viewStepExplanation steps =
     Html.div []
         (steps
-            |> mapToColoredDivsIndexed
-                (\_ st ->
+            |> mapToColoredDivs
+                (\st ->
                     [ mathGridWrapper
                         [ Html.div []
                             [ Html.text (st.dividendWithRemainder |> toString)
