@@ -128,16 +128,18 @@ toProduct int =
 
 
 type alias Step =
-    { dividendWithRemainder : EquationNumber DividendPart
+    { dividend : EquationNumber DividendPart
+    , dividendWithRemainder : EquationNumber DividendPart
     , divisor : EquationNumber Divisor
     , quotient : EquationNumber QuotientPart
     , remainder : EquationNumber Remainder
     , product : EquationNumber Product
+    , nextNumber : Maybe (EquationNumber DividendPart)
     }
 
 
-step : EquationNumber Divisor -> EquationNumber DividendPart -> EquationNumber Remainder -> Step
-step ((EquationNumber divisor) as typedDivisor) (EquationNumber dividendPart) (EquationNumber prevRemainder) =
+stepWithoutNextNumber : EquationNumber Divisor -> EquationNumber DividendPart -> EquationNumber Remainder -> Step
+stepWithoutNextNumber ((EquationNumber divisor) as typedDivisor) ((EquationNumber dividendPart) as typedDividendPart) (EquationNumber prevRemainder) =
     let
         adjustedDividend =
             dividendPart + (prevRemainder * 10)
@@ -159,11 +161,13 @@ step ((EquationNumber divisor) as typedDivisor) (EquationNumber dividendPart) (E
                 , remainder = remainder
                 }
     in
-    { dividendWithRemainder = adjustedDividend |> toDividendPart
+    { dividend = typedDividendPart
+    , dividendWithRemainder = adjustedDividend |> toDividendPart
     , divisor = typedDivisor
     , quotient = quotient |> toQuotient
     , product = product |> toProduct
     , remainder = remainder |> toRemainder
+    , nextNumber = Nothing
     }
 
 
@@ -195,7 +199,7 @@ equationSteps { dividend, divisor } =
             dividend |> dividendParts divisor
 
         stepWithDevisor =
-            step divisor
+            stepWithoutNextNumber divisor
     in
     ( parts
         |> List.foldl
@@ -208,7 +212,17 @@ equationSteps { dividend, divisor } =
             )
             ( [], 0 |> toRemainder )
         |> Tuple.first
-        |> List.reverse
+        -- reverse list and add "next number" (to draw down)
+        |> List.foldl
+            (\current acc ->
+                case acc of
+                    next :: rest ->
+                        { current | nextNumber = Just next.dividend } :: next :: rest
+
+                    rest ->
+                        current :: rest
+            )
+            []
     , List.length parts
     )
 
@@ -358,10 +372,33 @@ viewEquation { dividend, divisor, steps } =
                 (\index st ->
                     [ Html.div []
                         [ HtmlHelpers.when (index > 1) (Html.div [] [ textSpacer (index + 1), Html.text (st.dividendWithRemainder |> toString) ])
-                        , Html.div [] [ textSpacer index, Html.text (st.product |> toString |> String.append "-") ]
+                        , Html.div []
+                            [ textSpacer 0
+                            , Html.text "-"
+                            , Html.text (st.product |> toString)
 
-                        -- TODO: Append next number "drawn down" (foldr cons perhaps?)
-                        , Html.div [] [ textSpacer index, Html.text ("= " ++ (st.remainder |> toString)) ]
+                            -- "draw down" arrow:
+                            , HtmlHelpers.maybeNode
+                                (\_ ->
+                                    Html.span
+                                        [ Attributes.style "color" "rgba(127,127,127, 0.5)"
+                                        ]
+                                        [ Html.text "↓" ]
+                                )
+                                st.nextNumber
+                            ]
+                        , Html.div []
+                            [ textSpacer 0
+                            , Html.text "="
+                            , Html.text (st.remainder |> toString)
+
+                            -- "draw down" next number:
+                            , HtmlHelpers.maybeNode
+                                (\nextNumber ->
+                                    Html.text (nextNumber |> toString)
+                                )
+                                st.nextNumber
+                            ]
                         ]
                     ]
                 )
