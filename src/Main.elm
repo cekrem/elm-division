@@ -2,7 +2,6 @@ module Main exposing (main)
 
 import Array
 import Browser
-import Dict
 import Html exposing (Html)
 import Html.Attributes as Attributes
 import Html.Events as Events
@@ -63,16 +62,6 @@ digits (EquationNumber int) =
         1
 
 
-isSingleDigit : EquationNumber a -> Bool
-isSingleDigit eqNum =
-    (eqNum |> digits) == 1
-
-
-isDoubleDigit : EquationNumber a -> Bool
-isDoubleDigit eqNum =
-    (eqNum |> digits) == 2
-
-
 type Dividend
     = Dividend
 
@@ -88,11 +77,6 @@ parseDividend input =
             |> Maybe.map EquationNumber
 
 
-toDividend : Int -> EquationNumber Dividend
-toDividend int =
-    EquationNumber int
-
-
 type DividendPart
     = DividendPart
 
@@ -104,11 +88,6 @@ toDividendPart int =
 
 type Divisor
     = Divisor
-
-
-toDivisor : Int -> EquationNumber Divisor
-toDivisor int =
-    EquationNumber int
 
 
 parseDivisor : String -> Maybe (EquationNumber Divisor)
@@ -164,15 +143,19 @@ type alias Step =
 stepWithoutNextNumber : EquationNumber Divisor -> EquationNumber DividendPart -> EquationNumber Remainder -> Int -> Step
 stepWithoutNextNumber ((EquationNumber divisor) as typedDivisor) ((EquationNumber dividendPart) as typedDividendPart) (EquationNumber prevRemainder) offset =
     let
+        adjustedDividend : Int
         adjustedDividend =
             dividendPart + (prevRemainder * 10)
 
+        quotient : Int
         quotient =
             adjustedDividend // divisor
 
+        product : Int
         product =
             quotient * divisor
 
+        remainder : Int
         remainder =
             adjustedDividend - product
     in
@@ -190,9 +173,11 @@ stepWithoutNextNumber ((EquationNumber divisor) as typedDivisor) ((EquationNumbe
 dividendParts : EquationNumber Divisor -> EquationNumber Dividend -> List ( EquationNumber DividendPart, Int )
 dividendParts (EquationNumber divisorInt) (EquationNumber dividendInt) =
     (let
+        naiveParts : List Int
         naiveParts =
-            dividendInt |> String.fromInt |> String.split "" |> List.map String.toInt >> List.map (Maybe.withDefault 0)
+            dividendInt |> String.fromInt |> String.split "" |> List.map String.toInt |> List.map (Maybe.withDefault 0)
 
+        makeDivisable : List Int -> List (EquationNumber a)
         makeDivisable parts =
             case parts of
                 first :: second :: rest ->
@@ -210,6 +195,7 @@ dividendParts (EquationNumber divisorInt) (EquationNumber dividendInt) =
         |> List.foldl
             (\partNumber ( parts, offsetCounter ) ->
                 let
+                    nextOffset : Int
                     nextOffset =
                         offsetCounter + (partNumber |> digits)
                 in
@@ -222,9 +208,11 @@ dividendParts (EquationNumber divisorInt) (EquationNumber dividendInt) =
 equationSteps : { a | dividend : EquationNumber Dividend, divisor : EquationNumber Divisor } -> ( List Step, Int )
 equationSteps { dividend, divisor } =
     let
+        parts : List ( EquationNumber DividendPart, Int )
         parts =
             dividend |> dividendParts divisor
 
+        stepWithDevisor : EquationNumber DividendPart -> EquationNumber Remainder -> Int -> Step
         stepWithDevisor =
             stepWithoutNextNumber divisor
     in
@@ -232,6 +220,7 @@ equationSteps { dividend, divisor } =
         |> List.foldl
             (\( dend, offset ) ( acc, prevRmd ) ->
                 let
+                    currentStep : Step
                     currentStep =
                         stepWithDevisor dend prevRmd offset
                 in
@@ -259,8 +248,7 @@ equationSteps { dividend, divisor } =
 
 
 type Msg
-    = Noop
-    | NextStep
+    = NextStep
     | PrevStep
     | SetDividend String
     | SetDivisor String
@@ -269,9 +257,6 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        Noop ->
-            ( model, Cmd.none )
-
         NextStep ->
             ( { model | activeStep = model.activeStep + 1 }, Cmd.none )
 
@@ -316,6 +301,7 @@ view model =
                 ( steps, numberOfSteps ) =
                     model |> equationSteps
 
+                activeSteps : List Step
                 activeSteps =
                     steps |> List.take activeStep
             in
@@ -339,6 +325,7 @@ view model =
                     ]
                 , viewEquation { dividend = dividend, divisor = divisor, steps = activeSteps }
                 , viewStepExplanation activeSteps
+                , viewFooter
                 ]
         )
         model.dividend
@@ -362,9 +349,11 @@ viewButton text onClick disabled =
 viewInput : EquationNumber a -> (String -> msg) -> Html msg
 viewInput number onInput =
     let
+        numberString : String
         numberString =
             number |> toString
 
+        length : Int
         length =
             numberString |> String.length
     in
@@ -384,35 +373,16 @@ viewInput number onInput =
         []
 
 
-mathGridWrapper : List (Html msg) -> Html msg
-mathGridWrapper content =
+viewFooter : Html msg
+viewFooter =
     Html.div
-        [ Attributes.style "background-image"
-            (String.join ","
-                [ "linear-gradient(to right, transparent calc(100% - 0.5px), grey 100%)"
-                , "linear-gradient(to bottom, transparent calc(100% - 0.5px), grey 100%)"
-                ]
-            )
-        , Attributes.style "background-size" "1ch calc(1em - 1px), 1ch calc(1em - 1px)"
-        , Attributes.style "background-position" "0.5px 0.5px"
-        , Attributes.style "background-origin" "content-box"
-        , Attributes.style "background-clip" "content-box"
-        , Attributes.style "background-repeat" "repeat, repeat"
-
-        -- typography
-        , Attributes.style "font-family"
-            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"
-        , Attributes.style "font-variant-numeric" "tabular-nums"
-        , Attributes.style "font-feature-settings" "\"tnum\" 1"
-        , Attributes.style "line-height" "1"
-        , Attributes.style "letter-spacing" "0"
-
-        -- avoid shifting the grid
-        , Attributes.style "padding" "0"
-        , Attributes.style "margin" "1em"
-        , Attributes.style "outline" "1px solid grey"
+        [ Attributes.style "font-size" "0.2em"
         ]
-        content
+        [ Html.a []
+            [ Html.text "Made between projects to help my daughter learn math and to help myself (mis)use phantom types. Source: "
+            , Html.a [ Attributes.href "https://github.com/cekrem/elm-division" ] [ Html.text "GitHub" ]
+            ]
+        ]
 
 
 viewEquation : { a | dividend : EquationNumber Dividend, divisor : EquationNumber Divisor, steps : List Step } -> Html Msg
@@ -469,51 +439,6 @@ viewEquation { dividend, divisor, steps } =
         ]
 
 
-equationColors : Array.Array String
-equationColors =
-    [ "rgba(255, 99, 132, 0.8)"
-    , "rgba(54, 162, 235, 0.8)"
-    , "rgba(255, 205, 86, 0.8)"
-    , "rgba(75, 192, 192, 0.8)"
-    , "rgba(153, 102, 255, 0.8)"
-    , "rgba(255, 159, 64, 0.8)"
-    , "rgba(199, 199, 199, 0.8)"
-    , "rgba(83, 102, 255, 0.8)"
-    , "rgba(255, 99, 255, 0.8)"
-    , "rgba(50, 205, 50, 0.8)"
-    , "rgba(255, 20, 147, 0.8)"
-    , "rgba(0, 191, 255, 0.8)"
-    , "rgba(255, 140, 0, 0.8)"
-    , "rgba(148, 0, 211, 0.8)"
-    , "rgba(220, 20, 60, 0.8)"
-    , "rgba(32, 178, 170, 0.8)"
-    , "rgba(255, 215, 0, 0.8)"
-    , "rgba(106, 90, 205, 0.8)"
-    , "rgba(255, 105, 180, 0.8)"
-    , "rgba(34, 139, 34, 0.8)"
-    ]
-        |> Array.fromList
-
-
-color : Int -> String
-color int =
-    let
-        index =
-            remainderBy (Array.length equationColors) int
-    in
-    equationColors |> Array.get index |> Maybe.withDefault "unset"
-
-
-mapToColoredSpans : (a -> List (Html msg)) -> List (Html.Attribute msg) -> List a -> List (Html msg)
-mapToColoredSpans transform attributes =
-    List.indexedMap (\index entry -> Html.span (Attributes.style "color" (color index) :: attributes) (transform entry))
-
-
-mapToColoredDivs : (a -> List (Html msg)) -> List (Html.Attribute msg) -> List a -> List (Html msg)
-mapToColoredDivs transform attributes =
-    List.indexedMap (\index entry -> Html.div (Attributes.style "color" (color index) :: attributes) (transform entry))
-
-
 viewStepExplanation : List Step -> Html msg
 viewStepExplanation steps =
     Html.div []
@@ -553,16 +478,83 @@ viewStepExplanation steps =
         )
 
 
+mathGridWrapper : List (Html msg) -> Html msg
+mathGridWrapper content =
+    Html.div
+        [ Attributes.style "background-image"
+            (String.join ","
+                [ "linear-gradient(to right, transparent calc(100% - 0.5px), grey 100%)"
+                , "linear-gradient(to bottom, transparent calc(100% - 0.5px), grey 100%)"
+                ]
+            )
+        , Attributes.style "background-size" "1ch calc(1em - 1px), 1ch calc(1em - 1px)"
+        , Attributes.style "background-position" "0.5px 0.5px"
+        , Attributes.style "background-origin" "content-box"
+        , Attributes.style "background-clip" "content-box"
+        , Attributes.style "background-repeat" "repeat, repeat"
+
+        -- typography
+        , Attributes.style "font-family"
+            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"
+        , Attributes.style "font-variant-numeric" "tabular-nums"
+        , Attributes.style "font-feature-settings" "\"tnum\" 1"
+        , Attributes.style "line-height" "1"
+        , Attributes.style "letter-spacing" "0"
+
+        -- avoid shifting the grid
+        , Attributes.style "padding" "0"
+        , Attributes.style "margin" "1em"
+        , Attributes.style "outline" "1px solid grey"
+        ]
+        content
+
+
+equationColors : Array.Array String
+equationColors =
+    [ "rgba(255, 99, 132, 0.8)"
+    , "rgba(54, 162, 235, 0.8)"
+    , "rgba(255, 205, 86, 0.8)"
+    , "rgba(75, 192, 192, 0.8)"
+    , "rgba(153, 102, 255, 0.8)"
+    , "rgba(255, 159, 64, 0.8)"
+    , "rgba(199, 199, 199, 0.8)"
+    , "rgba(83, 102, 255, 0.8)"
+    , "rgba(255, 99, 255, 0.8)"
+    , "rgba(50, 205, 50, 0.8)"
+    , "rgba(255, 20, 147, 0.8)"
+    , "rgba(0, 191, 255, 0.8)"
+    , "rgba(255, 140, 0, 0.8)"
+    , "rgba(148, 0, 211, 0.8)"
+    , "rgba(220, 20, 60, 0.8)"
+    , "rgba(32, 178, 170, 0.8)"
+    , "rgba(255, 215, 0, 0.8)"
+    , "rgba(106, 90, 205, 0.8)"
+    , "rgba(255, 105, 180, 0.8)"
+    , "rgba(34, 139, 34, 0.8)"
+    ]
+        |> Array.fromList
+
+
+color : Int -> String
+color int =
+    let
+        index : Int
+        index =
+            remainderBy (Array.length equationColors) int
+    in
+    equationColors |> Array.get index |> Maybe.withDefault "unset"
+
+
+mapToColoredSpans : (a -> List (Html msg)) -> List (Html.Attribute msg) -> List a -> List (Html msg)
+mapToColoredSpans transform attributes =
+    List.indexedMap (\index entry -> Html.span (Attributes.style "color" (color index) :: attributes) (transform entry))
+
+
+mapToColoredDivs : (a -> List (Html msg)) -> List (Html.Attribute msg) -> List a -> List (Html msg)
+mapToColoredDivs transform attributes =
+    List.indexedMap (\index entry -> Html.div (Attributes.style "color" (color index) :: attributes) (transform entry))
+
+
 textSpacer : Int -> Html msg
 textSpacer int =
     "" |> String.padLeft int (Char.fromCode 160) |> Html.text
-
-
-equationText :
-    { a
-        | dividend : EquationNumber Dividend
-        , divisor : EquationNumber Divisor
-    }
-    -> String
-equationText { dividend, divisor } =
-    (dividend |> toString) ++ " : " ++ (divisor |> toString) ++ " = "
