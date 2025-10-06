@@ -37,7 +37,7 @@ type alias Model =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( Model (EquationNumber 292) (EquationNumber 3) 0
+    ( Model (EquationNumber 444) (EquationNumber 3) 0
     , Cmd.none
     )
 
@@ -334,12 +334,8 @@ view model =
                 ]
                 [ Html.h3 [ Attributes.style "margin" "0" ] [ Html.text "Elm Division" ]
                 , Html.div []
-                    [ Html.input [ Attributes.value (dividend |> toString), Events.onInput SetDividend ] []
-                    , Html.input [ Attributes.value (divisor |> toString), Events.onInput SetDivisor ] []
-                    ]
-                , Html.div []
-                    [ Html.button [ Events.onClick PrevStep, Attributes.disabled (model.activeStep == 0) ] [ Html.text "<" ]
-                    , Html.button [ Events.onClick NextStep, Attributes.disabled (model.activeStep == numberOfSteps) ] [ Html.text ">" ]
+                    [ viewButton "<-" PrevStep (model.activeStep == 0)
+                    , viewButton "->" NextStep (model.activeStep == numberOfSteps)
                     ]
                 , viewEquation { dividend = dividend, divisor = divisor, steps = activeSteps }
                 , viewStepExplanation activeSteps
@@ -348,6 +344,44 @@ view model =
         model.dividend
         model.divisor
         model.activeStep
+
+
+viewButton : String -> msg -> Bool -> Html msg
+viewButton text onClick disabled =
+    Html.button
+        [ Events.onClick onClick
+        , Attributes.disabled disabled
+        , Attributes.style "all" "unset"
+        , Attributes.style "font-size" "1em"
+        , Attributes.style "margin" "0 1em"
+        , Attributes.style "cursor" "pointer"
+        ]
+        [ Html.text text ]
+
+
+viewInput : EquationNumber a -> (String -> msg) -> Html msg
+viewInput number onInput =
+    let
+        numberString =
+            number |> toString
+
+        length =
+            numberString |> String.length
+    in
+    Html.input
+        [ Attributes.value (number |> toString)
+        , Attributes.style "all" "unset"
+        , Attributes.style "font-size" "1em"
+        , Attributes.style "line-height" "1"
+        , Attributes.style "height" "1em"
+        , Attributes.style "padding" "0"
+        , Attributes.style "width" (String.fromInt length ++ "ch")
+        , Attributes.style "min-width" "0"
+        , Attributes.style "flex" "0 1 auto"
+        , Attributes.style "text-align" "center"
+        , Events.onInput onInput
+        ]
+        []
 
 
 mathGridWrapper : List (Html msg) -> Html msg
@@ -381,11 +415,14 @@ mathGridWrapper content =
         content
 
 
-viewEquation : { a | dividend : EquationNumber Dividend, divisor : EquationNumber Divisor, steps : List Step } -> Html msg
+viewEquation : { a | dividend : EquationNumber Dividend, divisor : EquationNumber Divisor, steps : List Step } -> Html Msg
 viewEquation { dividend, divisor, steps } =
     mathGridWrapper
         [ textSpacer 1
-        , Html.text (equationText { dividend = dividend, divisor = divisor })
+        , viewInput dividend SetDividend
+        , Html.text " ÷ "
+        , viewInput divisor SetDivisor
+        , Html.text " = "
         , (steps
             |> mapToColoredSpans
                 (\st ->
