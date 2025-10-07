@@ -376,7 +376,8 @@ viewInput number onInput =
 viewFooter : Html msg
 viewFooter =
     Html.div
-        [ Attributes.style "font-size" "0.2em"
+        [ Attributes.style "font-size" "1rem"
+        , Attributes.style "margin" "2rem"
         ]
         [ Html.a []
             [ Html.text "Made between projects to help my daughter learn math and to help myself (mis)use phantom types. Source: "
